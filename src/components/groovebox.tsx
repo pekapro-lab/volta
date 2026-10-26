@@ -6,8 +6,10 @@ import {
   CHANNELS,
   CHANNEL_IDS,
   PRESETS,
+  SAMPLES,
   STORAGE_KEY,
   defaultState,
+  emptySamples,
   emptySteps,
   formatClock,
   loadGroove,
@@ -15,11 +17,15 @@ import {
   type GrooveState,
   type Lane,
   type Preset,
+  type SampleId,
 } from "@/lib/groove/pattern";
 
 type ExportFile = { url: string; name: string };
 
 const METER_BARS = 36;
+const PAD_TONE = ["kick", "snare", "hat", "bass"] as const;
+
+type Screen = "groove" | "samples";
 
 function paintMeter(meter: HTMLElement, data: Uint8Array | null) {
   const bars = meter.children;
@@ -47,6 +53,8 @@ export function Groovebox() {
   const [note, setNote] = useState<string | null>(null);
   const [file, setFile] = useState<ExportFile | null>(null);
   const [ready, setReady] = useState(false);
+  const [screen, setScreen] = useState<Screen>("groove");
+  const [selected, setSelected] = useState<SampleId | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -146,6 +154,40 @@ export function Groovebox() {
   function clearGrid() {
     const blank = emptySteps();
     setState((current) => ({ ...current, presetId: null, steps: blank }));
+  }
+
+  function toggleSample(id: SampleId, index: number) {
+    setState((current) => {
+      const row = current.samples[id].slice();
+      row[index] = !row[index];
+      return { ...current, samples: { ...current.samples, [id]: row } };
+    });
+  }
+
+  function stampSample() {
+    if (!selected) return;
+    const step = playhead;
+    const id = selected;
+    setState((current) => {
+      const row = current.samples[id].slice();
+      row[step] = true;
+      return { ...current, samples: { ...current.samples, [id]: row } };
+    });
+  }
+
+  function clearSamples() {
+    setState((current) => ({ ...current, samples: emptySamples() }));
+  }
+
+  async function hitPad(id: SampleId) {
+    setSelected(id);
+    const engine = engineRef.current;
+    if (!engine) return;
+    try {
+      await engine.playSample(id);
+    } catch {
+      setError("El audio no se pudo iniciar. Vuelve a pulsar el pad.");
+    }
   }
 
   async function onPlay() {
@@ -359,6 +401,17 @@ export function Groovebox() {
       ) : null}
       {note ? <p className="text-sm text-muted">{note}</p> : null}
 
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Pantallas">
+        <button type="button" className="preset" role="tab" aria-selected={screen === "groove"} onClick={() => setScreen("groove")}>
+          Groove
+        </button>
+        <button type="button" className="preset" role="tab" aria-selected={screen === "samples"} onClick={() => setScreen("samples")}>
+          Samples
+        </button>
+      </div>
+
+      {screen === "groove" ? (
+      <>
       <section className="grid gap-3" aria-label="Patrones">
         <div className="flex flex-wrap items-center gap-2">
           <p className="mr-1 text-xs tracking-widest text-muted uppercase">Patrones</p>
@@ -462,6 +515,74 @@ export function Groovebox() {
           );
         })}
       </section>
+      </>
+      ) : (
+      <section className="grid gap-3" aria-label="Samples">
+        <div className="pad-grid">
+          {SAMPLES.map((sample, index) => (
+            <button
+              key={sample.id}
+              type="button"
+              className="pad"
+              data-channel={PAD_TONE[index % PAD_TONE.length]}
+              data-on={selected === sample.id ? "true" : "false"}
+              aria-pressed={selected === sample.id}
+              onClick={() => void hitPad(sample.id)}
+            >
+              {sample.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn" onClick={stampSample} disabled={!selected}>
+            Pegar al paso
+          </button>
+          <button type="button" className="btn" onClick={clearSamples}>
+            Vaciar samples
+          </button>
+        </div>
+        <p className="text-xs text-muted">
+          {selected
+            ? `Pega ${SAMPLES.find((sample) => sample.id === selected)?.label ?? ""} en el paso ${String(playhead + 1).padStart(2, "0")}.`
+            : "Toca un pad para oírlo encima del groove."}
+        </p>
+        {SAMPLES.map((sample, index) => (
+          <article
+            key={sample.id}
+            className="sample-lane"
+            data-channel={PAD_TONE[index % PAD_TONE.length]}
+            data-hit={selected === sample.id ? "true" : "false"}
+          >
+            <h2 className="lane-name text-xs">{sample.label}</h2>
+            <div className="step-strip" role="group" aria-label={`Pasos de ${sample.label}`}>
+              {[0, 1, 2, 3].map((group) => (
+                <div className="step-group" key={group}>
+                  {[0, 1, 2, 3].map((offset) => {
+                    const step = group * 4 + offset;
+                    const on = state.samples[sample.id][step];
+                    const now = playhead === step;
+                    return (
+                      <button
+                        key={step}
+                        type="button"
+                        className="step"
+                        data-on={on ? "true" : "false"}
+                        data-now={now ? "true" : "false"}
+                        aria-pressed={on}
+                        aria-label={`${sample.label}, paso ${step + 1}${now ? ", actual" : ""}`}
+                        onClick={() => toggleSample(sample.id, step)}
+                      >
+                        <span className="step-num">{step + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </section>
+      )}
 
       <p className="pb-2 text-center text-xs text-muted">Síntesis en el navegador · cuatro canales · exportación WAV</p>
     </main>

@@ -11,6 +11,37 @@ export type Lane = {
   solo: boolean;
 };
 
+export const SAMPLE_IDS = [
+  "clap",
+  "rim",
+  "tom",
+  "cowbell",
+  "shaker",
+  "conga",
+  "laser",
+  "zap",
+  "stab",
+  "voice",
+  "siren",
+  "fall",
+] as const;
+export type SampleId = (typeof SAMPLE_IDS)[number];
+
+export const SAMPLES: { id: SampleId; label: string }[] = [
+  { id: "clap", label: "Clap" },
+  { id: "rim", label: "Aro" },
+  { id: "tom", label: "Tom" },
+  { id: "cowbell", label: "Cencerro" },
+  { id: "shaker", label: "Shaker" },
+  { id: "conga", label: "Conga" },
+  { id: "laser", label: "Láser" },
+  { id: "zap", label: "Zap" },
+  { id: "stab", label: "Stab" },
+  { id: "voice", label: "Voz" },
+  { id: "siren", label: "Sirena" },
+  { id: "fall", label: "Caída" },
+];
+
 export type GrooveState = {
   bpm: number;
   master: number;
@@ -18,6 +49,7 @@ export type GrooveState = {
   steps: Record<ChannelId, boolean[]>;
   lanes: Record<ChannelId, Lane>;
   bass: number[];
+  samples: Record<SampleId, boolean[]>;
 };
 
 export type Preset = {
@@ -52,6 +84,23 @@ function row(): boolean[] {
 
 export function emptySteps(): Record<ChannelId, boolean[]> {
   return { kick: row(), snare: row(), hat: row(), bass: row() };
+}
+
+export function emptySamples(): Record<SampleId, boolean[]> {
+  return {
+    clap: row(),
+    rim: row(),
+    tom: row(),
+    cowbell: row(),
+    shaker: row(),
+    conga: row(),
+    laser: row(),
+    zap: row(),
+    stab: row(),
+    voice: row(),
+    siren: row(),
+    fall: row(),
+  };
 }
 
 function cloneSteps(steps: Record<ChannelId, boolean[]>): Record<ChannelId, boolean[]> {
@@ -116,6 +165,7 @@ export function defaultState(): GrooveState {
       bass: { ...DEFAULT_LANES.bass },
     },
     bass: preset.bass.slice(),
+    samples: emptySamples(),
   };
 }
 
@@ -125,6 +175,16 @@ function isUnit(value: unknown): value is number {
 
 function isBool16(value: unknown): value is boolean[] {
   return Array.isArray(value) && value.length === STEPS && value.every((cell) => typeof cell === "boolean");
+}
+
+function readSamples(value: unknown): Record<SampleId, boolean[]> {
+  const samples = emptySamples();
+  if (!value || typeof value !== "object") return samples;
+  const data = value as Partial<Record<SampleId, unknown>>;
+  for (const id of SAMPLE_IDS) {
+    if (isBool16(data[id])) samples[id] = data[id].slice();
+  }
+  return samples;
 }
 
 export function loadGroove(raw: string | null): GrooveState | null {
@@ -157,6 +217,7 @@ export function loadGroove(raw: string | null): GrooveState | null {
         bass: { ...data.lanes.bass },
       },
       bass: data.bass.slice(),
+      samples: readSamples(data.samples),
     };
   } catch {
     return null;

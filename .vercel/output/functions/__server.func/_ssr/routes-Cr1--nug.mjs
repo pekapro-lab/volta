@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { K as require_react, b as require_jsx_runtime } from "../_libs/@tanstack/react-router+[...].mjs";
 import { a as Pause, i as Play, n as RotateCcw, o as Minus, r as Plus, s as Download } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BOvxrusP.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-Cr1--nug.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function clamp(value) {
@@ -75,6 +75,70 @@ var CHANNEL_IDS = [
 	"hat",
 	"bass"
 ];
+var SAMPLE_IDS = [
+	"clap",
+	"rim",
+	"tom",
+	"cowbell",
+	"shaker",
+	"conga",
+	"laser",
+	"zap",
+	"stab",
+	"voice",
+	"siren",
+	"fall"
+];
+var SAMPLES = [
+	{
+		id: "clap",
+		label: "Clap"
+	},
+	{
+		id: "rim",
+		label: "Aro"
+	},
+	{
+		id: "tom",
+		label: "Tom"
+	},
+	{
+		id: "cowbell",
+		label: "Cencerro"
+	},
+	{
+		id: "shaker",
+		label: "Shaker"
+	},
+	{
+		id: "conga",
+		label: "Conga"
+	},
+	{
+		id: "laser",
+		label: "Láser"
+	},
+	{
+		id: "zap",
+		label: "Zap"
+	},
+	{
+		id: "stab",
+		label: "Stab"
+	},
+	{
+		id: "voice",
+		label: "Voz"
+	},
+	{
+		id: "siren",
+		label: "Sirena"
+	},
+	{
+		id: "fall",
+		label: "Caída"
+	}
+];
 var CHANNELS = [
 	{
 		id: "kick",
@@ -135,6 +199,22 @@ function emptySteps() {
 		snare: row(),
 		hat: row(),
 		bass: row()
+	};
+}
+function emptySamples() {
+	return {
+		clap: row(),
+		rim: row(),
+		tom: row(),
+		cowbell: row(),
+		shaker: row(),
+		conga: row(),
+		laser: row(),
+		zap: row(),
+		stab: row(),
+		voice: row(),
+		siren: row(),
+		fall: row()
 	};
 }
 function cloneSteps(steps) {
@@ -247,7 +327,8 @@ function defaultState() {
 			hat: { ...DEFAULT_LANES.hat },
 			bass: { ...DEFAULT_LANES.bass }
 		},
-		bass: preset.bass.slice()
+		bass: preset.bass.slice(),
+		samples: emptySamples()
 	};
 }
 function isUnit(value) {
@@ -255,6 +336,13 @@ function isUnit(value) {
 }
 function isBool16(value) {
 	return Array.isArray(value) && value.length === 16 && value.every((cell) => typeof cell === "boolean");
+}
+function readSamples(value) {
+	const samples = emptySamples();
+	if (!value || typeof value !== "object") return samples;
+	const data = value;
+	for (const id of SAMPLE_IDS) if (isBool16(data[id])) samples[id] = data[id].slice();
+	return samples;
 }
 function loadGroove(raw) {
 	if (!raw) return null;
@@ -279,7 +367,8 @@ function loadGroove(raw) {
 				hat: { ...data.lanes.hat },
 				bass: { ...data.lanes.bass }
 			},
-			bass: data.bass.slice()
+			bass: data.bass.slice(),
+			samples: readSamples(data.samples)
 		};
 	} catch {
 		return null;
@@ -290,6 +379,161 @@ function formatClock(seconds) {
 	const minutes = Math.floor(whole / 60);
 	const remain = whole % 60;
 	return `${String(minutes).padStart(2, "0")}:${String(remain).padStart(2, "0")}`;
+}
+function noiseHit(ctx, noise, out, time, dur, peak, highpass) {
+	const source = ctx.createBufferSource();
+	source.buffer = noise;
+	const filter = ctx.createBiquadFilter();
+	filter.type = "highpass";
+	filter.frequency.setValueAtTime(highpass, time);
+	const gain = ctx.createGain();
+	gain.gain.setValueAtTime(peak, time);
+	gain.gain.exponentialRampToValueAtTime(1e-4, time + dur);
+	source.connect(filter);
+	filter.connect(gain);
+	gain.connect(out);
+	source.start(time, Math.random() * .45);
+	source.stop(time + dur + .02);
+}
+function pitch(ctx, out, type, from, to, time, dur, peak) {
+	const osc = ctx.createOscillator();
+	const gain = ctx.createGain();
+	osc.type = type;
+	osc.frequency.setValueAtTime(from, time);
+	osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), time + dur);
+	gain.gain.setValueAtTime(1e-4, time);
+	gain.gain.exponentialRampToValueAtTime(peak, time + Math.min(.012, dur * .25));
+	gain.gain.exponentialRampToValueAtTime(1e-4, time + dur);
+	osc.connect(gain);
+	gain.connect(out);
+	osc.start(time);
+	osc.stop(time + dur + .03);
+	return osc;
+}
+function triggerSample(ctx, noise, out, id, time) {
+	switch (id) {
+		case "clap":
+			for (const delay of [
+				0,
+				.011,
+				.023
+			]) noiseHit(ctx, noise, out, time + delay, .11, delay === 0 ? .42 : .28, 900);
+			pitch(ctx, out, "triangle", 420, 180, time, .04, .16);
+			break;
+		case "rim":
+			pitch(ctx, out, "square", 980, 420, time, .028, .28);
+			pitch(ctx, out, "triangle", 460, 320, time, .05, .22);
+			break;
+		case "tom":
+			pitch(ctx, out, "sine", 196, 78, time, .28, .7);
+			noiseHit(ctx, noise, out, time, .03, .16, 400);
+			break;
+		case "cowbell": {
+			const band = ctx.createBiquadFilter();
+			band.type = "bandpass";
+			band.frequency.setValueAtTime(1200, time);
+			band.Q.setValueAtTime(4, time);
+			const gain = ctx.createGain();
+			gain.gain.setValueAtTime(.28, time);
+			gain.gain.exponentialRampToValueAtTime(1e-4, time + .22);
+			band.connect(gain);
+			gain.connect(out);
+			for (const freq of [560, 845]) {
+				const osc = ctx.createOscillator();
+				osc.type = "square";
+				osc.frequency.setValueAtTime(freq, time);
+				osc.connect(band);
+				osc.start(time);
+				osc.stop(time + .25);
+			}
+			break;
+		}
+		case "shaker":
+			noiseHit(ctx, noise, out, time, .045, .32, 6500);
+			noiseHit(ctx, noise, out, time + .05, .03, .18, 7200);
+			break;
+		case "conga":
+			pitch(ctx, out, "sine", 280, 168, time, .18, .62);
+			noiseHit(ctx, noise, out, time, .02, .14, 800);
+			break;
+		case "laser":
+			pitch(ctx, out, "sawtooth", 1760, 90, time, .32, .22);
+			break;
+		case "zap":
+			pitch(ctx, out, "square", 1400, 70, time, .1, .2);
+			noiseHit(ctx, noise, out, time, .06, .24, 1800);
+			break;
+		case "stab": {
+			const filter = ctx.createBiquadFilter();
+			filter.type = "lowpass";
+			filter.Q.setValueAtTime(6, time);
+			filter.frequency.setValueAtTime(2200, time);
+			filter.frequency.exponentialRampToValueAtTime(280, time + .22);
+			const gain = ctx.createGain();
+			gain.gain.setValueAtTime(1e-4, time);
+			gain.gain.exponentialRampToValueAtTime(.28, time + .01);
+			gain.gain.exponentialRampToValueAtTime(1e-4, time + .24);
+			filter.connect(gain);
+			gain.connect(out);
+			for (const freq of [
+				196,
+				247,
+				294
+			]) {
+				const osc = ctx.createOscillator();
+				osc.type = "sawtooth";
+				osc.frequency.setValueAtTime(freq, time);
+				osc.connect(filter);
+				osc.start(time);
+				osc.stop(time + .28);
+			}
+			break;
+		}
+		case "voice": {
+			const osc = ctx.createOscillator();
+			osc.type = "sawtooth";
+			osc.frequency.setValueAtTime(196, time);
+			osc.frequency.exponentialRampToValueAtTime(150, time + .22);
+			const mix = ctx.createGain();
+			mix.gain.setValueAtTime(1e-4, time);
+			mix.gain.exponentialRampToValueAtTime(.34, time + .02);
+			mix.gain.exponentialRampToValueAtTime(1e-4, time + .26);
+			for (const freq of [700, 1220]) {
+				const formant = ctx.createBiquadFilter();
+				formant.type = "bandpass";
+				formant.frequency.setValueAtTime(freq, time);
+				formant.Q.setValueAtTime(8, time);
+				const level = ctx.createGain();
+				level.gain.value = .7;
+				osc.connect(formant);
+				formant.connect(level);
+				level.connect(mix);
+			}
+			mix.connect(out);
+			osc.start(time);
+			osc.stop(time + .3);
+			break;
+		}
+		case "siren": {
+			const osc = ctx.createOscillator();
+			const gain = ctx.createGain();
+			osc.type = "sine";
+			osc.frequency.setValueAtTime(520, time);
+			osc.frequency.linearRampToValueAtTime(980, time + .16);
+			osc.frequency.linearRampToValueAtTime(540, time + .34);
+			gain.gain.setValueAtTime(1e-4, time);
+			gain.gain.exponentialRampToValueAtTime(.28, time + .02);
+			gain.gain.exponentialRampToValueAtTime(1e-4, time + .4);
+			osc.connect(gain);
+			gain.connect(out);
+			osc.start(time);
+			osc.stop(time + .44);
+			break;
+		}
+		case "fall":
+			pitch(ctx, out, "sine", 740, 48, time, .55, .4);
+			noiseHit(ctx, noise, out, time, .28, .16, 500);
+	}
 }
 function writeString(view, offset, text) {
 	for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
@@ -383,6 +627,7 @@ var GrooveEngine = class {
 	analyser = null;
 	noise = null;
 	bus = {};
+	sampleBus = null;
 	spectrum = /* @__PURE__ */ new Uint8Array(64);
 	state = null;
 	playing = false;
@@ -422,6 +667,11 @@ var GrooveEngine = class {
 		let step = this.heldStep;
 		for (const event of this.events) if (event.time <= now) step = event.step;
 		return step;
+	}
+	async playSample(id) {
+		const ctx = this.ensureContext();
+		if (ctx.state === "suspended") await ctx.resume();
+		this.triggerSample(id, ctx.currentTime);
 	}
 	readSpectrum() {
 		if (!this.analyser) return null;
@@ -531,6 +781,10 @@ var GrooveEngine = class {
 			gain.connect(compressor);
 			this.bus[id] = gain;
 		}
+		const sampleBus = ctx.createGain();
+		sampleBus.gain.value = .9;
+		sampleBus.connect(compressor);
+		this.sampleBus = sampleBus;
 		this.applyMix();
 		return ctx;
 	}
@@ -586,6 +840,12 @@ var GrooveEngine = class {
 		if (state.steps.snare[step]) this.triggerSnare(time, state.lanes.snare.decay);
 		if (state.steps.hat[step]) this.triggerHat(time, state.lanes.hat.decay);
 		if (state.steps.bass[step]) this.triggerBass(time, state.lanes.bass.decay, state.bass[step] ?? 40);
+		if (!state.samples) return;
+		for (const id of SAMPLE_IDS) if (state.samples[id]?.[step]) this.triggerSample(id, time);
+	}
+	triggerSample(id, time) {
+		if (!this.ctx || !this.noise || !this.sampleBus) return;
+		triggerSample(this.ctx, this.noise, this.sampleBus, id, time);
 	}
 	triggerKick(time, decay) {
 		const ctx = this.ctx;
@@ -837,6 +1097,12 @@ var GrooveEngine = class {
 	}
 };
 var METER_BARS = 36;
+var PAD_TONE = [
+	"kick",
+	"snare",
+	"hat",
+	"bass"
+];
 function paintMeter(meter, data) {
 	const bars = meter.children;
 	for (let i = 0; i < bars.length; i++) {
@@ -862,6 +1128,8 @@ function Groovebox() {
 	const [note, setNote] = (0, import_react.useState)(null);
 	const [file, setFile] = (0, import_react.useState)(null);
 	const [ready, setReady] = (0, import_react.useState)(false);
+	const [screen, setScreen] = (0, import_react.useState)("groove");
+	const [selected, setSelected] = (0, import_react.useState)(null);
 	const stateRef = (0, import_react.useRef)(state);
 	stateRef.current = state;
 	const engineRef = (0, import_react.useRef)(null);
@@ -965,6 +1233,51 @@ function Groovebox() {
 			presetId: null,
 			steps: blank
 		}));
+	}
+	function toggleSample(id, index) {
+		setState((current) => {
+			const row = current.samples[id].slice();
+			row[index] = !row[index];
+			return {
+				...current,
+				samples: {
+					...current.samples,
+					[id]: row
+				}
+			};
+		});
+	}
+	function stampSample() {
+		if (!selected) return;
+		const step = playhead;
+		const id = selected;
+		setState((current) => {
+			const row = current.samples[id].slice();
+			row[step] = true;
+			return {
+				...current,
+				samples: {
+					...current.samples,
+					[id]: row
+				}
+			};
+		});
+	}
+	function clearSamples() {
+		setState((current) => ({
+			...current,
+			samples: emptySamples()
+		}));
+	}
+	async function hitPad(id) {
+		setSelected(id);
+		const engine = engineRef.current;
+		if (!engine) return;
+		try {
+			await engine.playSample(id);
+		} catch {
+			setError("El audio no se pudo iniciar. Vuelve a pulsar el pad.");
+		}
 	}
 	async function onPlay() {
 		const engine = engineRef.current;
@@ -1260,7 +1573,27 @@ function Groovebox() {
 				className: "text-sm text-muted",
 				children: note
 			}) : null,
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex flex-wrap gap-2",
+				role: "tablist",
+				"aria-label": "Pantallas",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: "preset",
+					role: "tab",
+					"aria-selected": screen === "groove",
+					onClick: () => setScreen("groove"),
+					children: "Groove"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: "preset",
+					role: "tab",
+					"aria-selected": screen === "samples",
+					onClick: () => setScreen("samples"),
+					children: "Samples"
+				})]
+			}),
+			screen === "groove" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 				className: "grid gap-3",
 				"aria-label": "Patrones",
 				children: [
@@ -1286,8 +1619,7 @@ function Groovebox() {
 						children: "M silencia el canal. S lo aísla. La caída controla la duración de cada golpe."
 					})
 				]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("section", {
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("section", {
 				className: "grid gap-3",
 				"aria-label": "Secuenciador",
 				children: CHANNELS.map((channel) => {
@@ -1393,6 +1725,86 @@ function Groovebox() {
 						})]
 					}, channel.id);
 				})
+			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "grid gap-3",
+				"aria-label": "Samples",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "pad-grid",
+						children: SAMPLES.map((sample, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: "pad",
+							"data-channel": PAD_TONE[index % PAD_TONE.length],
+							"data-on": selected === sample.id ? "true" : "false",
+							"aria-pressed": selected === sample.id,
+							onClick: () => void hitPad(sample.id),
+							children: sample.label
+						}, sample.id))
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap gap-2",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: "btn",
+							onClick: stampSample,
+							disabled: !selected,
+							children: "Pegar al paso"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: "btn",
+							onClick: clearSamples,
+							children: "Vaciar samples"
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-xs text-muted",
+						children: selected ? `Pega ${SAMPLES.find((sample) => sample.id === selected)?.label ?? ""} en el paso ${String(playhead + 1).padStart(2, "0")}.` : "Toca un pad para oírlo encima del groove."
+					}),
+					SAMPLES.map((sample, index) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", {
+						className: "sample-lane",
+						"data-channel": PAD_TONE[index % PAD_TONE.length],
+						"data-hit": selected === sample.id ? "true" : "false",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+							className: "lane-name text-xs",
+							children: sample.label
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "step-strip",
+							role: "group",
+							"aria-label": `Pasos de ${sample.label}`,
+							children: [
+								0,
+								1,
+								2,
+								3
+							].map((group) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "step-group",
+								children: [
+									0,
+									1,
+									2,
+									3
+								].map((offset) => {
+									const step = group * 4 + offset;
+									const on = state.samples[sample.id][step];
+									const now = playhead === step;
+									return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: "step",
+										"data-on": on ? "true" : "false",
+										"data-now": now ? "true" : "false",
+										"aria-pressed": on,
+										"aria-label": `${sample.label}, paso ${step + 1}${now ? ", actual" : ""}`,
+										onClick: () => toggleSample(sample.id, step),
+										children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "step-num",
+											children: step + 1
+										})
+									}, step);
+								})
+							}, group))
+						})]
+					}, sample.id))
+				]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "pb-2 text-center text-xs text-muted",

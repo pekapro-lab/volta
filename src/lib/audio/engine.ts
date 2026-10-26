@@ -1,4 +1,5 @@
-import { CHANNEL_IDS, type ChannelId, type GrooveState } from "@/lib/groove/pattern";
+import { CHANNEL_IDS, SAMPLE_IDS, type ChannelId, type GrooveState, type SampleId } from "@/lib/groove/pattern";
+import { triggerSample as synthSample } from "@/lib/audio/samples";
 import { concatFloats, decodeToWav, encodeWav } from "@/lib/audio/wav";
 
 const WORKLET = `
@@ -53,6 +54,7 @@ export class GrooveEngine {
   private analyser: AnalyserNode | null = null;
   private noise: AudioBuffer | null = null;
   private bus: Partial<Record<ChannelId, GainNode>> = {};
+  private sampleBus: GainNode | null = null;
   private spectrum = new Uint8Array(64);
   private state: GrooveState | null = null;
   private playing = false;
@@ -99,6 +101,12 @@ export class GrooveEngine {
       if (event.time <= now) step = event.step;
     }
     return step;
+  }
+
+  async playSample(id: SampleId) {
+    const ctx = this.ensureContext();
+    if (ctx.state === "suspended") await ctx.resume();
+    this.triggerSample(id, ctx.currentTime);
   }
 
   readSpectrum(): Uint8Array | null {
@@ -209,6 +217,10 @@ export class GrooveEngine {
       gain.connect(compressor);
       this.bus[id] = gain;
     }
+    const sampleBus = ctx.createGain();
+    sampleBus.gain.value = 0.9;
+    sampleBus.connect(compressor);
+    this.sampleBus = sampleBus;
     this.applyMix();
     return ctx;
   }
@@ -268,6 +280,15 @@ export class GrooveEngine {
     if (state.steps.snare[step]) this.triggerSnare(time, state.lanes.snare.decay);
     if (state.steps.hat[step]) this.triggerHat(time, state.lanes.hat.decay);
     if (state.steps.bass[step]) this.triggerBass(time, state.lanes.bass.decay, state.bass[step] ?? 40);
+    if (!state.samples) return;
+    for (const id of SAMPLE_IDS) {
+      if (state.samples[id]?.[step]) this.triggerSample(id, time);
+    }
+  }
+
+  private triggerSample(id: SampleId, time: number) {
+    if (!this.ctx || !this.noise || !this.sampleBus) return;
+    synthSample(this.ctx, this.noise, this.sampleBus, id, time);
   }
 
   private triggerKick(time: number, decay: number) {
