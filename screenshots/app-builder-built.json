@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "VOLTA — Máquina de groove",
+      "hasCanvas": false,
+      "bodyTextLen": 614,
+      "bodyTextHash": "5d281ab10f83d2908dcb2cbe29b48020a1d75291e669d463d2b3be1973f0de7c",
+      "bodyTextPrefix": "VOLTA Máquina de groove · 16 pasos PASO 01 Reproducir Pausa Limp",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "VOLTA — Máquina de groove",
+      "hasCanvas": false,
+      "bodyTextLen": 614,
+      "bodyTextHash": "5d281ab10f83d2908dcb2cbe29b48020a1d75291e669d463d2b3be1973f0de7c",
+      "bodyTextPrefix": "VOLTA Máquina de groove · 16 pasos PASO 01 Reproducir Pausa Limp",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

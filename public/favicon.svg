@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="VOLTA">
+  <rect width="32" height="32" rx="6" fill="#07090E"/>
+  <rect x="3.5" y="3.5" width="25" height="25" rx="4" fill="#10141D"/>
+  <path d="M7 8.2 L16 26" fill="none" stroke="#3DF0FF" stroke-width="4.4" stroke-linecap="square"/>
+  <path d="M25 8.2 L16 26" fill="none" stroke="#FF2D6A" stroke-width="4.4" stroke-linecap="square"/>
+  <rect x="14.1" y="4.6" width="3.8" height="3.8" fill="#D6FF3C"/>
+</svg>

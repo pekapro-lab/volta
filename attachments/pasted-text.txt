@@ -1,0 +1,32 @@
+Actúa como un desarrollador experto en audio digital y diseño de interfaces de usuario. Tu objetivo es crear una "Máquina de Sonido Groove" (Groovebox / Secuenciador de Ritmos) interactiva, visualmente atractiva, funcional y con capacidad de exportación de audio.
+
+La aplicación debe incluir las siguientes especificaciones:
+
+1. Arquitectura del Sistema de Audio:
+- Utiliza la Web Audio API para generar y reproducir los sonidos de forma nativa sin latencia.
+- Incluye al menos 4 canales de instrumentos esenciales: Kick (Bombo), Snare (Caja), Hi-Hat (Platillos) y Synth/Bass (Sintetizador de bajo).
+- Los sonidos percusivos deben generarse mediante síntesis matemática (osciladores, ruido blanco y filtros) o buffers limpios embebidos.
+
+2. Secuenciador por Pasos (Step Sequencer):
+- Una cuadrícula (grid) de 16 pasos para cada uno de los 4 canales.
+- Los botones de los pasos deben ser interactivos (activado/desactivado) con cambios de color claros.
+- Un indicador visual móvil (playhead) que muestre el paso actual en tiempo real a medida que avanza la secuencia.
+
+3. Controles Globales y de Canal:
+- Control de BPM (Tempo) deslizable de 60 a 180 BPM.
+- Botones globales de Play, Pause y Reset (limpiar la cuadrícula).
+- Controles individuales por canal: Volumen (Mute/Solo) y un potenciómetro virtual para el Decay (duración).
+
+4. Sistema de Grabación y Exportación (NUEVO):
+- Añade un botón destacado llamado "Grabar y Exportar".
+- Al activarse, el sistema debe utilizar un MediaRecorder (o un nodo de script/buffer) conectado al audio principal de la app para capturar lo que suena mientras el secuenciador está en Play.
+- Al detener la grabación, debe empaquetar automáticamente el audio y disparar la descarga de un archivo de audio en formato .wav (o .webm/.ogg de alta calidad si la compatibilidad nativa de WAV lo requiere) para que el usuario guarde su bucle (loop).
+
+5. Interfaz Visual (UI) y Estilo:
+- Diseño moderno de estilo Cyberpunk con un fondo oscuro (Dark Mode). Los pasos activos deben resaltar con colores neón eléctricos diferenciados por canal.
+- El módulo de grabación debe tener un indicador visual claro (como un led rojo parpadeando) que muestre que se está capturando el audio.
+- Diseño completamente responsivo y limpio.
+
+6. Código y Entrega:
+- Genera todo el código necesario en un único bloque limpio, combinando HTML5, CSS3 y JavaScript moderno (ES6+).
+- Sin dependencias ni librerías externas; listo para funcionar al instante.
