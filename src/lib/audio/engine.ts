@@ -1,4 +1,15 @@
-import { CHANNEL_IDS, SAMPLE_IDS, type ChannelId, type GrooveState, type SampleId } from "@/lib/groove/pattern";
+import {
+  BANK_IDS,
+  CHANNEL_IDS,
+  SAMPLES,
+  SAMPLE_IDS,
+  type BankId,
+  type ChannelId,
+  type GrooveState,
+  type SampleId,
+} from "@/lib/groove/pattern";
+
+const SAMPLE_BANK = Object.fromEntries(SAMPLES.map((sample) => [sample.id, sample.bank])) as Record<SampleId, BankId>;
 import { triggerSample as synthSample } from "@/lib/audio/samples";
 import { concatFloats, decodeToWav, encodeWav } from "@/lib/audio/wav";
 
@@ -55,6 +66,7 @@ export class GrooveEngine {
   private noise: AudioBuffer | null = null;
   private bus: Partial<Record<ChannelId, GainNode>> = {};
   private sampleBus: GainNode | null = null;
+  private bankBus: Partial<Record<BankId, GainNode>> = {};
   private spectrum = new Uint8Array(64);
   private state: GrooveState | null = null;
   private playing = false;
@@ -101,6 +113,23 @@ export class GrooveEngine {
       if (event.time <= now) step = event.step;
     }
     return step;
+  }
+
+  /** Step nearest to "now" while playing — used to quantize live pad hits into the loop. */
+  getNearestStep() {
+    if (!this.playing || !this.ctx) return this.heldStep;
+    const now = this.ctx.currentTime;
+    const half = this.stepDuration() / 2;
+    let best = this.getPlayhead();
+    let bestDist = Infinity;
+    for (const event of this.events) {
+      const dist = Math.abs(event.time - now);
+      if (dist < bestDist && event.time - now < half) {
+        bestDist = dist;
+        best = event.step;
+      }
+    }
+    return best;
   }
 
   async playSample(id: SampleId) {
@@ -186,6 +215,7 @@ export class GrooveEngine {
     this.mediaRecorder = null;
     void this.ctx?.close();
     this.ctx = null;
+    this.bankBus = {};
   }
 
   private ensureContext() {
@@ -221,6 +251,12 @@ export class GrooveEngine {
     sampleBus.gain.value = 0.9;
     sampleBus.connect(compressor);
     this.sampleBus = sampleBus;
+    for (const id of BANK_IDS) {
+      const gain = ctx.createGain();
+      gain.gain.value = 0.8;
+      gain.connect(sampleBus);
+      this.bankBus[id] = gain;
+    }
     this.applyMix();
     return ctx;
   }
@@ -243,6 +279,10 @@ export class GrooveEngine {
       this.bus[id]?.gain.setTargetAtTime(audible ? lane.volume : 0, now, 0.012);
     }
     this.master.gain.setTargetAtTime(this.state.master, now, 0.012);
+    this.sampleBus?.gain.setTargetAtTime(this.state.sampleVol ?? 0.9, now, 0.012);
+    for (const id of BANK_IDS) {
+      this.bankBus[id]?.gain.setTargetAtTime(this.state.bankVol?.[id] ?? 0.8, now, 0.012);
+    }
   }
 
   private stepDuration() {
@@ -288,7 +328,8 @@ export class GrooveEngine {
 
   private triggerSample(id: SampleId, time: number) {
     if (!this.ctx || !this.noise || !this.sampleBus) return;
-    synthSample(this.ctx, this.noise, this.sampleBus, id, time);
+    const out = this.bankBus[SAMPLE_BANK[id]] ?? this.sampleBus;
+    synthSample(this.ctx, this.noise, out, id, time);
   }
 
   private triggerKick(time: number, decay: number) {

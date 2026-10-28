@@ -11,36 +11,70 @@ export type Lane = {
   solo: boolean;
 };
 
-export const SAMPLE_IDS = [
-  "clap",
-  "rim",
-  "tom",
-  "cowbell",
-  "shaker",
-  "conga",
-  "laser",
-  "zap",
-  "stab",
-  "voice",
-  "siren",
-  "fall",
+export const SAMPLE_BANKS = [
+  { id: "drums", label: "Batería" },
+  { id: "perc", label: "Percusión" },
+  { id: "bass", label: "Bajos" },
+  { id: "synth", label: "Synth" },
+  { id: "fx", label: "FX" },
+  { id: "vox", label: "Voces" },
 ] as const;
-export type SampleId = (typeof SAMPLE_IDS)[number];
+export type BankId = (typeof SAMPLE_BANKS)[number]["id"];
+export const BANK_IDS = SAMPLE_BANKS.map((bank) => bank.id) as BankId[];
 
-export const SAMPLES: { id: SampleId; label: string }[] = [
-  { id: "clap", label: "Clap" },
-  { id: "rim", label: "Aro" },
-  { id: "tom", label: "Tom" },
-  { id: "cowbell", label: "Cencerro" },
-  { id: "shaker", label: "Shaker" },
-  { id: "conga", label: "Conga" },
-  { id: "laser", label: "Láser" },
-  { id: "zap", label: "Zap" },
-  { id: "stab", label: "Stab" },
-  { id: "voice", label: "Voz" },
-  { id: "siren", label: "Sirena" },
-  { id: "fall", label: "Caída" },
-];
+export const SAMPLES = [
+  { id: "kick808", label: "Bombo 808", bank: "drums", key: "1" },
+  { id: "kickpunch", label: "Bombo seco", bank: "drums", key: "2" },
+  { id: "snare2", label: "Caja", bank: "drums", key: "3" },
+  { id: "clap", label: "Clap", bank: "drums", key: "4" },
+  { id: "rim", label: "Aro", bank: "drums", key: "5" },
+  { id: "tom", label: "Tom", bank: "drums", key: "6" },
+  { id: "openhat", label: "Hat abierto", bank: "drums", key: "7" },
+  { id: "crash", label: "Crash", bank: "drums", key: "8" },
+  { id: "cowbell", label: "Cencerro", bank: "perc", key: "q" },
+  { id: "shaker", label: "Shaker", bank: "perc", key: "w" },
+  { id: "conga", label: "Conga", bank: "perc", key: "e" },
+  { id: "bongo", label: "Bongo", bank: "perc", key: "r" },
+  { id: "clave", label: "Clave", bank: "perc", key: "t" },
+  { id: "tambo", label: "Pandereta", bank: "perc", key: "y" },
+  { id: "wood", label: "Bloque", bank: "perc", key: "u" },
+  { id: "triangle", label: "Triángulo", bank: "perc", key: "i" },
+  { id: "sub", label: "Sub", bank: "bass", key: "a" },
+  { id: "acid", label: "Acid", bank: "bass", key: "s" },
+  { id: "reese", label: "Reese", bank: "bass", key: "d" },
+  { id: "pluckbass", label: "Bajo pluck", bank: "bass", key: "f" },
+  { id: "wobble", label: "Wobble", bank: "bass", key: "g" },
+  { id: "octbass", label: "Octava", bank: "bass", key: "h" },
+  { id: "slide", label: "Slide", bank: "bass", key: "j" },
+  { id: "fmbass", label: "FM", bank: "bass", key: "k" },
+  { id: "stab", label: "Stab", bank: "synth", key: "z" },
+  { id: "minor", label: "Acorde m", bank: "synth", key: "x" },
+  { id: "major", label: "Acorde M", bank: "synth", key: "c" },
+  { id: "pluck", label: "Pluck", bank: "synth", key: "v" },
+  { id: "lead", label: "Lead", bank: "synth", key: "b" },
+  { id: "pad", label: "Pad", bank: "synth", key: "n" },
+  { id: "arp", label: "Arpegio", bank: "synth", key: "m" },
+  { id: "bell", label: "Campana", bank: "synth", key: "," },
+  { id: "laser", label: "Láser", bank: "fx" },
+  { id: "zap", label: "Zap", bank: "fx" },
+  { id: "siren", label: "Sirena", bank: "fx" },
+  { id: "fall", label: "Caída", bank: "fx" },
+  { id: "riser", label: "Subida", bank: "fx" },
+  { id: "sweep", label: "Barrido", bank: "fx" },
+  { id: "blip", label: "Blip", bank: "fx" },
+  { id: "glitch", label: "Glitch", bank: "fx" },
+  { id: "voice", label: "Voz A", bank: "vox" },
+  { id: "voxe", label: "Voz E", bank: "vox" },
+  { id: "voxo", label: "Voz O", bank: "vox" },
+  { id: "voxi", label: "Voz I", bank: "vox" },
+  { id: "hey", label: "¡Hey!", bank: "vox" },
+  { id: "choir", label: "Coro", bank: "vox" },
+  { id: "uh", label: "Uh", bank: "vox" },
+  { id: "beatbox", label: "Beatbox", bank: "vox" },
+] as const satisfies readonly { id: string; label: string; bank: BankId; key?: string }[];
+
+export type SampleId = (typeof SAMPLES)[number]["id"];
+export const SAMPLE_IDS = SAMPLES.map((sample) => sample.id) as SampleId[];
 
 export type GrooveState = {
   bpm: number;
@@ -50,6 +84,8 @@ export type GrooveState = {
   lanes: Record<ChannelId, Lane>;
   bass: number[];
   samples: Record<SampleId, boolean[]>;
+  bankVol: Record<BankId, number>;
+  sampleVol: number;
 };
 
 export type Preset = {
@@ -87,20 +123,22 @@ export function emptySteps(): Record<ChannelId, boolean[]> {
 }
 
 export function emptySamples(): Record<SampleId, boolean[]> {
-  return {
-    clap: row(),
-    rim: row(),
-    tom: row(),
-    cowbell: row(),
-    shaker: row(),
-    conga: row(),
-    laser: row(),
-    zap: row(),
-    stab: row(),
-    voice: row(),
-    siren: row(),
-    fall: row(),
-  };
+  return Object.fromEntries(SAMPLE_IDS.map((id) => [id, row()])) as Record<SampleId, boolean[]>;
+}
+
+export function defaultBankVol(): Record<BankId, number> {
+  return Object.fromEntries(BANK_IDS.map((id) => [id, 0.8])) as Record<BankId, number>;
+}
+
+function readBankVol(value: unknown): Record<BankId, number> {
+  const vol = defaultBankVol();
+  if (!value || typeof value !== "object") return vol;
+  const data = value as Partial<Record<BankId, unknown>>;
+  for (const id of BANK_IDS) {
+    const v = data[id];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1) vol[id] = v;
+  }
+  return vol;
 }
 
 function cloneSteps(steps: Record<ChannelId, boolean[]>): Record<ChannelId, boolean[]> {
@@ -166,6 +204,8 @@ export function defaultState(): GrooveState {
     },
     bass: preset.bass.slice(),
     samples: emptySamples(),
+    bankVol: defaultBankVol(),
+    sampleVol: 0.9,
   };
 }
 
@@ -218,6 +258,8 @@ export function loadGroove(raw: string | null): GrooveState | null {
       },
       bass: data.bass.slice(),
       samples: readSamples(data.samples),
+      bankVol: readBankVol(data.bankVol),
+      sampleVol: isUnit(data.sampleVol) ? data.sampleVol : 0.9,
     };
   } catch {
     return null;
