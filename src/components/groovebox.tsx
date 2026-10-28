@@ -7,6 +7,7 @@ import {
   CHANNEL_IDS,
   PRESETS,
   SAMPLES,
+  SAMPLE_BANKS,
   STORAGE_KEY,
   defaultState,
   emptySamples,
@@ -16,6 +17,7 @@ import {
   type ChannelId,
   type GrooveState,
   type Lane,
+  type BankId,
   type Preset,
   type SampleId,
 } from "@/lib/groove/pattern";
@@ -23,7 +25,9 @@ import {
 type ExportFile = { url: string; name: string };
 
 const METER_BARS = 36;
-const PAD_TONE = ["kick", "snare", "hat", "bass"] as const;
+const KEY_TO_SAMPLE = new Map<string, SampleId>(
+  SAMPLES.flatMap((sample) => ("key" in sample && sample.key ? [[sample.key, sample.id] as const] : [])),
+);
 
 type Screen = "groove" | "samples";
 
@@ -55,6 +59,13 @@ export function Groovebox() {
   const [ready, setReady] = useState(false);
   const [screen, setScreen] = useState<Screen>("groove");
   const [selected, setSelected] = useState<SampleId | null>(null);
+  const [looping, setLooping] = useState(false);
+  const [flash, setFlash] = useState<Record<string, number>>({});
+  const loopingRef = useRef(false);
+  loopingRef.current = looping;
+  const screenRef = useRef<Screen>("groove");
+  screenRef.current = screen;
+  const takesRef = useRef<{ id: SampleId; step: number; added: boolean }[][]>([]);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -181,13 +192,68 @@ export function Groovebox() {
 
   async function hitPad(id: SampleId) {
     setSelected(id);
+    setFlash((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }));
+    window.setTimeout(() => {
+      setFlash((current) => {
+        const next = { ...current };
+        if ((next[id] ?? 0) <= 1) delete next[id];
+        else next[id] -= 1;
+        return next;
+      });
+    }, 140);
     const engine = engineRef.current;
     if (!engine) return;
     try {
       await engine.playSample(id);
     } catch {
       setError("El audio no se pudo iniciar. Vuelve a pulsar el pad.");
+      return;
     }
+    if (loopingRef.current && engine.isPlaying()) {
+      const step = engine.getNearestStep();
+      setState((current) => {
+        const row = current.samples[id].slice();
+        const take = takesRef.current[takesRef.current.length - 1];
+        if (take) take.push({ id, step, added: !row[step] });
+        row[step] = true;
+        return { ...current, samples: { ...current.samples, [id]: row } };
+      });
+    }
+  }
+
+  async function toggleLoopRec() {
+    if (looping) {
+      setLooping(false);
+      return;
+    }
+    takesRef.current.push([]);
+    if (takesRef.current.length > 20) takesRef.current.shift();
+    if (!playingRef.current) await onPlay();
+    setLooping(true);
+  }
+
+  function undoTake() {
+    let take = takesRef.current.pop();
+    while (take && take.length === 0) take = takesRef.current.pop();
+    if (!take) return;
+    const added = take.filter((hit) => hit.added);
+    setState((current) => {
+      const samples = { ...current.samples };
+      for (const hit of added) {
+        const row = samples[hit.id].slice();
+        row[hit.step] = false;
+        samples[hit.id] = row;
+      }
+      return { ...current, samples };
+    });
+  }
+
+  function clearPad(id: SampleId) {
+    setState((current) => ({ ...current, samples: { ...current.samples, [id]: Array(16).fill(false) } }));
+  }
+
+  function setBankVol(id: BankId, value: number) {
+    setState((current) => ({ ...current, bankVol: { ...current.bankVol, [id]: value } }));
   }
 
   async function onPlay() {
@@ -205,6 +271,7 @@ export function Groovebox() {
   }
 
   function onPause() {
+    setLooping(false);
     engineRef.current?.pause();
     setPlaying(false);
     playingRef.current = false;
@@ -263,14 +330,25 @@ export function Groovebox() {
     }
   }
 
+  const hitPadRef = useRef(hitPad);
+  hitPadRef.current = hitPad;
+
   recordRef.current = () => {
     void onRecord();
   };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.code !== "Space" || event.repeat) return;
       const target = event.target as HTMLElement | null;
+      if (screenRef.current === "samples" && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const padId = KEY_TO_SAMPLE.get(event.key.toLowerCase());
+        if (padId && !target?.closest("input, textarea, select")) {
+          event.preventDefault();
+          void hitPadRef.current(padId);
+          return;
+        }
+      }
+      if (event.code !== "Space" || event.repeat) return;
       if (target?.closest("button, a, input, textarea, select, [role='slider']")) return;
       event.preventDefault();
       if (playingRef.current) onPause();
@@ -517,40 +595,130 @@ export function Groovebox() {
       </section>
       </>
       ) : (
-      <section className="grid gap-3" aria-label="Samples">
-        <div className="pad-grid">
-          {SAMPLES.map((sample, index) => (
+      <section className="grid gap-4" aria-label="Samples">
+        <div className="sampler-bar">
+          <div className="flex flex-wrap gap-2">
             <button
-              key={sample.id}
               type="button"
-              className="pad"
-              data-channel={PAD_TONE[index % PAD_TONE.length]}
-              data-on={selected === sample.id ? "true" : "false"}
-              aria-pressed={selected === sample.id}
-              onClick={() => void hitPad(sample.id)}
+              className="btn btn-primary"
+              data-active={playing ? "true" : "false"}
+              onClick={() => (playing ? onPause() : void onPlay())}
             >
-              {sample.label}
+              {playing ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
+              {playing ? "Parar" : "Reproducir"}
             </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn" onClick={stampSample} disabled={!selected}>
-            Pegar al paso
-          </button>
-          <button type="button" className="btn" onClick={clearSamples}>
-            Vaciar samples
-          </button>
+            <button
+              type="button"
+              className="btn btn-loop"
+              data-active={looping ? "true" : "false"}
+              aria-pressed={looping}
+              onClick={() => void toggleLoopRec()}
+            >
+              <span className="led" data-on={looping ? "true" : "false"} aria-hidden />
+              {looping ? "Grabando (overdub)" : "Grabar loop"}
+            </button>
+            <button type="button" className="btn" onClick={undoTake}>
+              <RotateCcw size={16} aria-hidden />
+              Deshacer toma
+            </button>
+            <button type="button" className="btn" onClick={clearSamples}>
+              Borrar loop
+            </button>
+          </div>
+          <label className="grid min-w-[10rem] gap-1">
+            <span className="flex justify-between text-xs tracking-widest text-muted uppercase">
+              Volumen samples
+              <span className="tabular-nums">{Math.round(state.sampleVol * 100)}</span>
+            </span>
+            <input
+              className="fader"
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(state.sampleVol * 100)}
+              aria-label="Volumen general de samples"
+              suppressHydrationWarning
+              onChange={(event) => setState((current) => ({ ...current, sampleVol: Number(event.target.value) / 100 }))}
+            />
+          </label>
         </div>
         <p className="text-xs text-muted">
-          {selected
-            ? `Pega ${SAMPLES.find((sample) => sample.id === selected)?.label ?? ""} en el paso ${String(playhead + 1).padStart(2, "0")}.`
-            : "Toca un pad para oírlo encima del groove."}
+          Toca varios pads a la vez para mezclarlos. Con «Grabar loop» cada golpe se guarda en el paso más cercano del
+          bucle de 16 pasos y suena junto al groove; vuelve a grabar encima para añadir capas. Teclado: 1–8, Q–I, A–K, Z–,.
         </p>
-        {SAMPLES.map((sample, index) => (
+
+        {SAMPLE_BANKS.map((bank) => (
+          <article key={bank.id} className="bank" data-bank={bank.id}>
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="pip" aria-hidden />
+                <h2 className="lane-name text-sm">{bank.label}</h2>
+              </div>
+              <label className="flex items-center gap-2 text-xs tracking-widest text-muted uppercase">
+                Vol
+                <input
+                  className="fader bank-fader"
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(state.bankVol[bank.id] * 100)}
+                  aria-label={`Volumen de ${bank.label}`}
+                  suppressHydrationWarning
+                  onChange={(event) => setBankVol(bank.id, Number(event.target.value) / 100)}
+                />
+                <span className="w-7 text-right tabular-nums">{Math.round(state.bankVol[bank.id] * 100)}</span>
+              </label>
+            </header>
+            <div className="pad-grid">
+              {SAMPLES.filter((sample) => sample.bank === bank.id).map((sample) => {
+                const used = state.samples[sample.id].some(Boolean);
+                const hitNow = playing && state.samples[sample.id][playhead];
+                return (
+                  <button
+                    key={sample.id}
+                    type="button"
+                    className="pad"
+                    data-on={flash[sample.id] || hitNow ? "true" : "false"}
+                    data-selected={selected === sample.id ? "true" : "false"}
+                    data-used={used ? "true" : "false"}
+                    aria-label={`${sample.label}${"key" in sample ? ` (tecla ${sample.key})` : ""}`}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      void hitPad(sample.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void hitPad(sample.id);
+                      }
+                    }}
+                  >
+                    <span>{sample.label}</span>
+                    {"key" in sample ? <span className="pad-key">{sample.key}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </article>
+        ))}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="mr-1 text-xs tracking-widest text-muted uppercase">Editor de pasos</p>
+          <button type="button" className="btn" onClick={stampSample} disabled={!selected}>
+            Pegar al paso {String(playhead + 1).padStart(2, "0")}
+          </button>
+          {selected ? (
+            <button type="button" className="btn" onClick={() => clearPad(selected)}>
+              Vaciar {SAMPLES.find((sample) => sample.id === selected)?.label}
+            </button>
+          ) : null}
+        </div>
+        {SAMPLES.filter((sample) => sample.id === selected || state.samples[sample.id].some(Boolean)).map((sample) => (
           <article
             key={sample.id}
             className="sample-lane"
-            data-channel={PAD_TONE[index % PAD_TONE.length]}
+            data-bank={sample.bank}
             data-hit={selected === sample.id ? "true" : "false"}
           >
             <h2 className="lane-name text-xs">{sample.label}</h2>
@@ -584,7 +752,7 @@ export function Groovebox() {
       </section>
       )}
 
-      <p className="pb-2 text-center text-xs text-muted">Síntesis en el navegador · cuatro canales · exportación WAV</p>
+      <p className="pb-2 text-center text-xs text-muted">Síntesis en el navegador · 4 canales + 48 samples · exportación WAV</p>
     </main>
   );
 }
